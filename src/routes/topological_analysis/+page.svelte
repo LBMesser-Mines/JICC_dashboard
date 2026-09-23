@@ -3,7 +3,16 @@
   import LineChart from '$lib/line_chart.svelte';
   import results from '$lib/data/results.json';
   import resultsTwo from '$lib/data/resultsTwo.json';
-  
+ 
+  import NetworkMap, { type Point } from '$lib/NetworkMap.svelte';
+    import NetworkMap from "$lib/NetworkMap.svelte";
+
+  const points: Point[] = [
+    { lat: 39.74, lon: -104.99, name: 'Denver', type: 'supply' },
+    { lat: 38.83, lon: -104.82, name: 'Colorado Springs', type: 'transshipment' },
+    { lat: 40.59, lon: -105.08, name: 'Fort Collins', type: 'demand' }
+  ];
+
 	let count = $state(0);
   const items = [
   {title: 'Supply', value: 42},
@@ -63,6 +72,9 @@
       ]}
     />
   </Box>
+</div>
+<div class="grid">
+  <NetworkMap {points}/>
 </div>
 
 <style>
