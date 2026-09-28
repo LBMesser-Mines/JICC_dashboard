@@ -1,10 +1,10 @@
 <script lang="ts">
   import Box from "$lib/box.svelte";
 	let count = $state(0);
-  const items = [
-  {title: 'Supply', value: 42},
-  {title: 'Demand', value: 35},
-  ];
+ 
+  import Term from '$lib/term.svelte';
+  import { createUsedTerms } from '$lib/glossary_context'; 
+  createUsedTerms();
 </script>
 
 <title>JICC Dashboard</title>
@@ -23,13 +23,8 @@
 </div>
 
 <div class="grid">
-  {#each items as item}
-    <Box title={item.title}>
-      <p>{item.value}</p>
-    </Box>
-  {/each}
   <Box>
-    {#snippet footer()}<small>Updated today</small>{/snippet}
+    {#snippet footer()}<small>Updated today <Term id="node"/></small>{/snippet}
     <p>Main Content</p>
   </Box>
 </div>
@@ -42,3 +37,5 @@
   padding: 1rem;
 }
 </style>
+
+

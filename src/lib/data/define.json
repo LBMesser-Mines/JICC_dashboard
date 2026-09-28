@@ -1,0 +1,12 @@
+{
+  "KeyTerms": {
+    "Node": {
+      "name": "Node",
+      "define": "a node defintion"
+    },
+    "Edge": {
+      "name": "edge",
+      "define": "a edge defintion"
+    }
+  }
+}

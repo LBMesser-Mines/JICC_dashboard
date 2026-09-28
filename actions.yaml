@@ -1,0 +1,3 @@
+- run: npm run build
+  env:
+    BASE_PATH: "/${{ github.event.repository.name }}"

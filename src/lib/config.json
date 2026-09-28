@@ -1,0 +1,16 @@
+{
+  "emails": {
+    "Dan": {
+      "name": "Dr. Bienstock",
+      "email": "dano@ieor.columbia.edu"
+    },
+    "Luke": {
+      "name": "Luke Messer",
+      "email": "luke_messer@mines.edu"
+    },
+    "Newman": {
+      "name": "Dr. Newman",
+      "email": "anewman@mines.edu"
+    }
+  }
+}

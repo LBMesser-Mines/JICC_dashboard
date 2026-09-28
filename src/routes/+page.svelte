@@ -1,5 +1,10 @@
 <script lang="ts">
   import Box from "$lib/box.svelte";
+
+  import Contact from '$lib/contact.svelte';
+  import {emails} from '$lib/config.json'
+
+  import Glossary from '$lib/glossary.svelte';
 </script>
 
 <title>JICC Dashboard</title>
@@ -10,22 +15,24 @@
 </div>
 <div class="twoColumnOffset">
   <Box title="Key Terms">
-    <ul>
-      <li>Node: a node definition</li>
-      <li>Edge: an edge defintion</li>
-    </ul>
+    <Glossary /> 
   </Box>
   <Box title="Contributor">
     <h3>ONR</h3>
-    <p>Kip</p>
+    <p>Dr. Krebs</p>
     <h3>Colombia</h3>
-    <p>Dan</p>
+    <p> Dr. Bienstock </p>
     <h3>Mines</h3>
     <ul>
-      <li>Luke</li>
-      <li>Brandon</li>
-      <li>etc.</li>
+      <li>Dr. Newman</li>
+      <li>Luke Messer </li>
+      <li>Brandon Werling</li>
+      <li>Justin Kilb</li>
+      <li>Jordan Ida</li>
+      <li>Jeremey Reynolds</li>
+      <li>Nich Buch</li>
     </ul>
+    <Contact name={emails.Luke.name} email={emails.Luke.email} subject={"JICC Dashboard Questions"}></Contact>
   </Box>
 </div>
 

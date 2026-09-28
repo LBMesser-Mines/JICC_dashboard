@@ -7,6 +7,7 @@
   const tabs = [
     {label: 'Overview', href: '/'},
     {label: 'Topological', href: '/topological_analysis'},
+    {label: 'Predictive', href: '/historical_analysis'},
     {label: 'Settings', href: '/settings'},
   ];
 </script>
