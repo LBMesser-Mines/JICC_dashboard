@@ -5,4 +5,6 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [sveltekit()],
   optimizeDeps: { exclude: ["maplibre-gl"] },
+  // MapLibre's worker is an ES module (see network_map.svelte).
+  worker: { format: "es" },
 });

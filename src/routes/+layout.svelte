@@ -1,6 +1,7 @@
 <script lang="ts">
 	import favicon from '$lib/assets/favicon.svg';
   import {page} from '$app/state';
+  import {resolve} from '$app/paths';
 
 	let { children } = $props();
 
@@ -9,7 +10,10 @@
     {label: 'Topological', href: '/topological_analysis'},
     {label: 'Predictive', href: '/historical_analysis'},
     {label: 'Interdict', href: '/settings'},
-  ];
+  ] as const;
+
+  // Links carry the base path (e.g. /JICC_dashboard on GitHub Pages); ignore a trailing slash when matching.
+  const trim = (p: string) => p.replace(/\/$/, '') || '/';
 </script>
 
 <svelte:head>
@@ -19,7 +23,7 @@
 <nav class="tabbar">
   <span class="site-title">Drug Interdiction Dashboard</span>
   {#each tabs as tab}
-    <a href={tab.href} class:active={page.url.pathname === tab.href}>{tab.label}</a>
+    <a href={resolve(tab.href)} class:active={trim(page.url.pathname) === trim(resolve(tab.href))}>{tab.label}</a>
   {/each}
 </nav>
 

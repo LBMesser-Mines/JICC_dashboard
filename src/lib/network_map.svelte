@@ -3,6 +3,10 @@
   import * as maplibregl from 'maplibre-gl';
   import type { MapLayerMouseEvent, CircleLayerSpecification, ExpressionSpecification } from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
+  // MapLibre locates its worker at runtime, which the production bundle misses;
+  // import it explicitly so Vite bundles it (with its shared chunk) and emits a URL.
+  import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+  maplibregl.setWorkerUrl(workerUrl);
 
   import type { Network, Route, Centrality, Connectivity, NodeId } from '$lib/types';
   import {
