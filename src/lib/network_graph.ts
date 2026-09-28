@@ -368,4 +368,158 @@ export function buildZoneOverlayGeoJSON(
   };
 }
 
+/** Human-readable label + short explanation for each metric (details panel). */
+export const METRIC_INFO: Record<MetricKey, { label: string; description: string }> = {
+  betweenness_subset: {
+    label: "Betweenness",
+    description: "How often the node lies on shortest supply→demand paths (chokepoint importance).",
+  },
+  degree: {
+    label: "Degree",
+    description: "Share of the network the node is directly connected to.",
+  },
+  closeness: {
+    label: "Closeness",
+    description: "How near the node is, on average, to every other node.",
+  },
+  katz: {
+    label: "Katz",
+    description: "Influence from direct and indirect connections, discounted by distance.",
+  },
+  connectivity: {
+    label: "Path redundancy",
+    description: "Avg. number of near-shortest (within 10%) POE↔demand paths. Higher = harder to disrupt.",
+  },
+};
+
+/** What each role means in this network (details panel). */
+export const ROLE_DESCRIPTIONS: Record<NodeRole, string> = {
+  supply: "Supply region in Mexico — routes originate here and head north toward the border.",
+  transshipment: "Port of entry on the US–Mexico border — where commodities cross into the US.",
+  demand: "US destination city — routes terminate here.",
+};
+
+/** Where one value sits within a set of values. */
+export interface MetricStanding {
+  value: number;
+  /** 0–100: share of values strictly below this one (ties split). */
+  percentile: number;
+  /** 1 = highest. */
+  rank: number;
+  /** Other nodes sharing this exact value. */
+  ties: number;
+  count: number;
+  median: number;
+}
+
+function median(sorted: number[]): number {
+  if (!sorted.length) return 0;
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/** Percentile / rank / median of `value` within `values`. */
+export function standingOf(value: number, values: number[]): MetricStanding {
+  const sorted = values.slice().sort((a, b) => a - b);
+  let below = 0;
+  let equal = 0;
+  for (const v of sorted) {
+    if (v < value) below++;
+    else if (v === value) equal++;
+  }
+  const n = sorted.length;
+  return {
+    value,
+    percentile: n ? ((below + equal / 2) / n) * 100 : 0,
+    rank: n - below - equal + 1,
+    ties: Math.max(equal - 1, 0),
+    count: n,
+    median: median(sorted),
+  };
+}
+
+/** A node's metric value; null when the metric doesn't apply (e.g. connectivity for supply). */
+export function metricValue(
+  m: MetricKey,
+  id: NodeId,
+  centrality?: Centrality,
+  connScores?: Record<NodeId, number>,
+): number | null {
+  if (m === "connectivity") return connScores?.[id] ?? null;
+  return centrality?.[m]?.[id] ?? null;
+}
+
+/** Undirected adjacency: nodeId -> [{ id, distance }]. */
+export function buildAdjacency(
+  net: Network,
+): Map<NodeId, { id: NodeId; distance: number }[]> {
+  const adj = new Map<NodeId, { id: NodeId; distance: number }[]>();
+  const add = (a: NodeId, b: NodeId, distance: number) => {
+    if (!adj.has(a)) adj.set(a, []);
+    adj.get(a)!.push({ id: b, distance });
+  };
+  for (const e of net.edges) {
+    add(e.origin, e.destination, e.distance);
+    if (!net.directed) add(e.destination, e.origin, e.distance);
+  }
+  return adj;
+}
+
+/** Edge distance of each hop along a path (null when an edge is missing). */
+export function pathLegDistances(
+  path: NodeId[],
+  adj: Map<NodeId, { id: NodeId; distance: number }[]>,
+): (number | null)[] {
+  return path.slice(1).map((id, i) => {
+    return adj.get(path[i])?.find((n) => n.id === id)?.distance ?? null;
+  });
+}
+
+/** Total edge distance along a path (missing edges count as 0). */
+export function pathLength(
+  path: NodeId[],
+  adj: Map<NodeId, { id: NodeId; distance: number }[]>,
+): number {
+  return pathLegDistances(path, adj).reduce<number>((s, d) => s + (d ?? 0), 0);
+}
+
+/** Edge distances are kilometres. */
+export function formatKm(d: number | null | undefined): string {
+  if (d == null) return "—";
+  return `${d >= 100 ? Math.round(d).toLocaleString() : d.toFixed(1)} km`;
+}
+
+/** 1 -> "1st", 22 -> "22nd". */
+export function ordinal(n: number): string {
+  const r = Math.round(n);
+  const s = ["th", "st", "nd", "rd"];
+  const v = r % 100;
+  return r + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+/** Short verdict + CSS class for a percentile. */
+export function percentileTier(p: number): { label: string; cls: string } {
+  if (p >= 90) return { label: "Very high", cls: "hi2" };
+  if (p >= 70) return { label: "High", cls: "hi" };
+  if (p > 30) return { label: "Typical", cls: "mid" };
+  if (p > 10) return { label: "Low", cls: "lo" };
+  return { label: "Very low", cls: "lo2" };
+}
+
+/** Pretty-print a node id: `poe_san_ysidro_ca` -> `San Ysidro, CA`. */
+export function formatNodeName(id: NodeId): string {
+  const parts = id.replace(/^poe_/, "").replace(/_mex$/, "").split("_");
+  const last = parts[parts.length - 1];
+  const words = (list: string[]) =>
+    list.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  // Supply ids look like `<cartel>_<state>_<hi|lo>_mex`.
+  if (id.endsWith("_mex") && parts.length >= 3 && (last === "hi" || last === "lo")) {
+    return `${parts[0].toUpperCase()} · ${words(parts.slice(1, -1))} (${last})`;
+  }
+  if (!id.endsWith("_mex") && last.length === 2 && parts.length > 1) {
+    return `${words(parts.slice(0, -1))}, ${last.toUpperCase()}`;
+  }
+  return words(parts);
+}
+
 export { EMPTY_FC };

@@ -35,6 +35,8 @@
     highlightRoutes?: Route[];
     /** A single route to further highlight (drawn bold on top). */
     focusRoute?: Route | null;
+    /** Node drawn with a highlight ring. */
+    selectedId?: NodeId | null;
     onselect?: (info: { id: NodeId | null; routes: Route[] }) => void;
   }
   let {
@@ -46,6 +48,7 @@
     zones = ['US', 'MX'],
     highlightRoutes = [],
     focusRoute = null,
+    selectedId = null,
     onselect,
   }: Props = $props();
 
@@ -120,8 +123,9 @@
       m.addSource('focus', { type: 'geojson', data: EMPTY_FC });
       m.addSource('nodes', { type: 'geojson', data: buildNodeGeoJSON(network, centrality, connScores) });
       m.addSource('route-nodes', { type: 'geojson', data: EMPTY_FC });
+      m.addSource('selected', { type: 'geojson', data: EMPTY_FC });
 
-      // Layer insert order (bottom -> top): edges -> highlight -> focus -> nodes -> route-nodes.
+      // Layer insert order (bottom -> top): edges -> highlight -> focus -> nodes -> route-nodes -> selected.
       m.addLayer({
         id: 'edges-layer',
         type: 'line',
@@ -171,13 +175,43 @@
         },
       });
 
-      m.on('click', 'nodes-layer', onNodeClick);
-      m.on('mouseenter', 'nodes-layer', () => (m.getCanvas().style.cursor = 'pointer'));
-      m.on('mouseleave', 'nodes-layer', () => (m.getCanvas().style.cursor = ''));
+      // Ring around the selected node: white halo under a dark ring, no fill.
+      const ringRadius: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 3, 8, 12, 15];
+      m.addLayer({
+        id: 'selected-halo-layer',
+        type: 'circle',
+        source: 'selected',
+        paint: {
+          'circle-radius': ringRadius,
+          'circle-opacity': 0,
+          'circle-stroke-width': 6,
+          'circle-stroke-color': '#fff',
+          'circle-stroke-opacity': 0.9,
+        },
+      });
+      m.addLayer({
+        id: 'selected-layer',
+        type: 'circle',
+        source: 'selected',
+        paint: {
+          'circle-radius': ringRadius,
+          'circle-opacity': 0,
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#111827',
+        },
+      });
+
+      // Base nodes are hidden while a route is focused; its stops stay clickable.
+      const clickable = ['nodes-layer', 'route-nodes-layer'];
+      for (const layer of clickable) {
+        m.on('click', layer, onNodeClick);
+        m.on('mouseenter', layer, () => (m.getCanvas().style.cursor = 'pointer'));
+        m.on('mouseleave', layer, () => (m.getCanvas().style.cursor = ''));
+      }
 
       // Click on empty map clears the selection.
       m.on('click', (e) => {
-        if (m.queryRenderedFeatures(e.point, { layers: ['nodes-layer'] }).length) return;
+        if (m.queryRenderedFeatures(e.point, { layers: clickable }).length) return;
         onselect?.({ id: null, routes: [] });
       });
 
@@ -225,6 +259,20 @@
     if (!mapReady || !map) return;
     (map.getSource('highlight') as maplibregl.GeoJSONSource).setData(
       hr.length ? buildRouteHighlightGeoJSON(hr, lookup) : EMPTY_FC,
+    );
+  });
+
+  // Ring the selected node.
+  $effect(() => {
+    const p = selectedId ? posLookup.get(selectedId) : undefined;
+    if (!mapReady || !map) return;
+    (map.getSource('selected') as maplibregl.GeoJSONSource | undefined)?.setData(
+      p
+        ? {
+            type: 'FeatureCollection',
+            features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [p[1], p[0]] }, properties: {} }],
+          }
+        : EMPTY_FC,
     );
   });
 

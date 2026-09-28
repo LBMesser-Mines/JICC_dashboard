@@ -8,7 +8,7 @@
     {label: 'Overview', href: '/'},
     {label: 'Topological', href: '/topological_analysis'},
     {label: 'Predictive', href: '/historical_analysis'},
-    {label: 'Settings', href: '/settings'},
+    {label: 'Interdict', href: '/settings'},
   ];
 </script>
 
@@ -17,6 +17,7 @@
 </svelte:head>
 
 <nav class="tabbar">
+  <span class="site-title">Drug Interdiction Dashboard</span>
   {#each tabs as tab}
     <a href={tab.href} class:active={page.url.pathname === tab.href}>{tab.label}</a>
   {/each}
@@ -34,7 +35,13 @@
     position: sticky;
     top: 0;
     z-index: 10;
-    justify-content: right;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .site-title {
+    margin-right: auto;
+    font-size: 1.25rem;
+    font-weight: 700;
   }
   .tabbar a {
     padding: .5rem 1.25rem;

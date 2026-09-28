@@ -17,3 +17,17 @@
     <li id={`term-${id}`}><strong>{term}</strong>: {definition}</li>
   {/each}
 </ul>
+
+<style>
+  .glossary {
+    margin: 0;
+    padding-left: 1.25rem;
+  }
+  .glossary li {
+    margin-bottom: 0.75rem;
+    line-height: 1.5;
+  }
+  .glossary li:last-child {
+    margin-bottom: 0;
+  }
+</style>

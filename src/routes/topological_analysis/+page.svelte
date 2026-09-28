@@ -1,6 +1,9 @@
 <script lang="ts">
   import Box from '$lib/box.svelte';
   import NetworkMap from '$lib/network_map.svelte';
+  import NodeDetails from '$lib/node_details.svelte';
+  import RouteDetails from '$lib/route_details.svelte';
+  import Term from '$lib/term.svelte';
   import {
     ROLE_COLORS,
     METRIC_OPTIONS,
@@ -10,23 +13,56 @@
     type MetricKey,
     type Zone,
     computeConnectivityScores,
+    routesForNode,
+    buildAdjacency,
+    pathLength,
+    formatKm,
     computeMetricDomains,
     formatMetric,
   } from '$lib/network_graph';
   import type { PageProps } from './$types';
-  import type { Route, NodeId } from '$lib/types';
+  import type { Route, NodeId, NodeRole } from '$lib/types';
 
   let { data }: PageProps = $props();
 
   let selectedId = $state<NodeId | null>(null);
-  let selectedRoutes = $state<Route[]>([]);
-  let selectedRouteIndex = $state<number | null>(null);
+  // Raw: routes are never mutated, and selectNode() matches them by identity.
+  let selectedRoutes = $state.raw<Route[]>([]);
+  let focusRoute = $state.raw<Route | null>(null);
   let colorMode = $state<ColorMode>('role');
   let zones = $state<Zone[]>(['US', 'MX']);
+  /** Commodity filter for the route list; 'all' shows every route. */
+  let commodity = $state<string>('all');
 
-  const focusRoute = $derived(
-    selectedRouteIndex != null ? (selectedRoutes[selectedRouteIndex] ?? null) : null,
-  );
+  const commodities = $derived([...new Set(data.results.routes.map((r) => r.commodity))].sort());
+
+  // Total km of every route, for the route list.
+  const routeKm = $derived.by(() => {
+    const adj = buildAdjacency(data.results.network);
+    return new Map(data.results.routes.map((r) => [r, pathLength(r.path, adj)]));
+  });
+
+  const SORT_OPTIONS = [
+    { key: 'default', label: 'Default' },
+    { key: 'drug-desc', label: 'Drug amount: high → low' },
+    { key: 'drug-asc', label: 'Drug amount: low → high' },
+    { key: 'dist-desc', label: 'Distance: long → short' },
+    { key: 'dist-asc', label: 'Distance: short → long' },
+  ] as const;
+  let sortKey = $state<(typeof SORT_OPTIONS)[number]['key']>('default');
+
+  const visibleRoutes = $derived.by(() => {
+    const list =
+      commodity === 'all' ? selectedRoutes.slice() : selectedRoutes.filter((r) => r.commodity === commodity);
+    const km = (r: Route) => routeKm.get(r) ?? 0;
+    switch (sortKey) {
+      case 'drug-desc': return list.sort((a, b) => b.commodity_count - a.commodity_count);
+      case 'drug-asc': return list.sort((a, b) => a.commodity_count - b.commodity_count);
+      case 'dist-desc': return list.sort((a, b) => km(b) - km(a));
+      case 'dist-asc': return list.sort((a, b) => km(a) - km(b));
+      default: return list;
+    }
+  });
 
   // Domains for the gradient legend (cheap; mirrors what the map computes).
   const connScores = $derived(computeConnectivityScores(data.results.connectivity));
@@ -35,20 +71,32 @@
   );
   const rampGradient = `linear-gradient(to right, ${METRIC_RAMP.join(', ')})`;
 
+  /** Map click: a node (keeps the focused route if the node is on it) or empty map. */
   function handleSelect(info: { id: NodeId | null; routes: Route[] }) {
-    selectedId = info.id;
-    selectedRoutes = info.routes;
-    selectedRouteIndex = null; // reset route focus on new node
+    if (info.id) selectNode(info.id);
+    else clearSelection();
   }
 
   function clearSelection() {
     selectedId = null;
     selectedRoutes = [];
-    selectedRouteIndex = null;
+    focusRoute = null;
   }
 
-  function selectRoute(i: number) {
-    selectedRouteIndex = selectedRouteIndex === i ? null : i; // toggle
+  /** Select a node from the map or the details panels. The focused route stays focused when the node is on it. */
+  function selectNode(id: NodeId) {
+    selectedId = id;
+    selectedRoutes = routesForNode(data.results.routes, id);
+    if (focusRoute && !selectedRoutes.includes(focusRoute)) focusRoute = null;
+  }
+
+  function selectRoute(r: Route) {
+    focusRoute = focusRoute === r ? null : r; // toggle
+  }
+
+  function setCommodity(c: string) {
+    commodity = c;
+    if (focusRoute && c !== 'all' && focusRoute.commodity !== c) focusRoute = null;
   }
 
   function toggleZone(z: Zone) {
@@ -89,20 +137,22 @@
       connectivity={data.results.connectivity}
       metric={colorMode}
       {zones}
-      highlightRoutes={selectedRoutes}
+      highlightRoutes={visibleRoutes}
       {focusRoute}
+      {selectedId}
       onselect={handleSelect}
     />
 
     {#if colorMode === 'role'}
       <div class="legend">
+        <span class="metric-name"><Term id="role" /></span>
         {#each Object.entries(ROLE_COLORS) as [role, color]}
-          <span class="chip"><i style="background:{color}"></i>{role}</span>
+          <span class="chip"><i style="background:{color}"></i><Term id={role as NodeRole} /></span>
         {/each}
       </div>
     {:else}
       <div class="legend legend-metric">
-        <span class="metric-name">{METRIC_OPTIONS.find((o) => o.key === colorMode)?.label}</span>
+        <span class="metric-name"><Term id={colorMode as MetricKey} /></span>
         <span class="bound">{formatMetric(domains[colorMode as MetricKey][0])}</span>
         <span class="ramp" style="background:{rampGradient}"></span>
         <span class="bound">{formatMetric(domains[colorMode as MetricKey][1])}</span>
@@ -112,30 +162,79 @@
 
   <Box title={selectedId ? `Routes through ${selectedId}` : 'Select a node'}>
     {#if selectedId}
-      <button class="clear" onclick={clearSelection}>Clear selection</button>
+      <div class="list-controls">
+        <button class="clear" onclick={clearSelection}>Clear selection</button>
+        <label class="filter">
+          Drug
+          <select value={commodity} onchange={(e) => setCommodity(e.currentTarget.value)}>
+            <option value="all">All</option>
+            {#each commodities as c}<option value={c}>{c}</option>{/each}
+          </select>
+        </label>
+        <label class="filter">
+          Sort
+          <select bind:value={sortKey}>
+            {#each SORT_OPTIONS as o}<option value={o.key}>{o.label}</option>{/each}
+          </select>
+        </label>
+      </div>
     {/if}
-    {#if selectedRoutes.length}
+    {#if visibleRoutes.length}
       <p class="count">
-        {selectedRoutes.length} route{selectedRoutes.length === 1 ? '' : 's'}
+        {visibleRoutes.length}{visibleRoutes.length !== selectedRoutes.length ? ` of ${selectedRoutes.length}` : ''}
+        route{selectedRoutes.length === 1 ? '' : 's'}
         <span class="hint">· click one to focus it</span>
       </p>
       <ul class="routes">
-        {#each selectedRoutes as r, i}
+        {#each visibleRoutes as r}
           <li>
-            <button class="route" class:active={selectedRouteIndex === i} onclick={() => selectRoute(i)}>
+            <button class="route" class:active={focusRoute === r} onclick={() => selectRoute(r)}>
               <b>{r.commodity}</b> · {r.vehicle_type} ×{r.vehicle_count}<br />
               <span class="od">{r.origin} → {r.destination}</span><br />
-              <span class="meta">{r.distance} hops · every {r.departure_interval}h</span>
+              <span class="meta">{r.commodity_count.toLocaleString()} {r.commodity} · {formatKm(routeKm.get(r))}</span>
             </button>
           </li>
         {/each}
       </ul>
+    {:else if selectedRoutes.length}
+      <p>No {commodity} routes pass through this node.</p>
     {:else if selectedId}
       <p>No routes pass through this node.</p>
     {:else}
       <p>Click a node on the map to see the routes it participates in.</p>
     {/if}
   </Box>
+
+  {#if focusRoute}
+    <div class="full route-box">
+      <Box>
+        <RouteDetails
+          network={data.results.network}
+          routes={data.results.routes}
+          centrality={data.results.centrality}
+          connectivity={data.results.connectivity}
+          route={focusRoute}
+          {selectedId}
+          onselectnode={selectNode}
+          onclose={() => (focusRoute = null)}
+        />
+      </Box>
+    </div>
+  {/if}
+
+  <div class="full">
+    <Box>
+      <NodeDetails
+        network={data.results.network}
+        routes={data.results.routes}
+        centrality={data.results.centrality}
+        connectivity={data.results.connectivity}
+        {selectedId}
+        nodeRoutes={selectedRoutes}
+        onselectnode={selectNode}
+      />
+    </Box>
+  </div>
 </div>
 
 <style>
@@ -144,6 +243,12 @@
     grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr);
     gap: 1rem;
     padding: 1rem;
+  }
+  .full {
+    grid-column: 1 / -1;
+  }
+  .route-box :global(.box) {
+    border-left: 4px solid #ef4444;
   }
   .toolbar {
     display: flex;
@@ -206,7 +311,7 @@
   .legend-metric {
     gap: 0.5rem;
   }
-  .legend-metric .metric-name {
+  .legend .metric-name {
     font-weight: 600;
     margin-right: 0.25rem;
   }
@@ -220,9 +325,30 @@
     font-size: 0.8rem;
     color: #555;
   }
+  .list-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+  }
+  .filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    color: #666;
+  }
+  .filter select {
+    padding: 0.25rem 0.4rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 0.8rem;
+    text-transform: capitalize;
+  }
   .clear {
     display: inline-block;
-    margin-bottom: 0.6rem;
     padding: 0.3rem 0.7rem;
     border: 1px solid #ccc;
     border-radius: 6px;
