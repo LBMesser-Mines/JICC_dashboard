@@ -10,7 +10,7 @@
 <title>JICC Dashboard</title>
 <div class="grid">
   <Box title=Why>
-    <p>Text describing what this dashboard is about and why this project exists</p>
+    <p>This dashboard was developed by the Mines/Colombia Office of Naval Research (ONR) team in collaboration with the JICC to help users identify when and where to allocate resources for maximum disruption of the drug network. It is currently under development, and its final outputs are still being refined.</p>
   </Box>
 </div>
 <div class="twoColumnOffset">
