@@ -70,7 +70,7 @@
   function nodePaint(mode: ColorMode): NonNullable<CircleLayerSpecification['paint']> {
     // Fixed, readable node size regardless of the selected metric.
     const radius: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 3, 3, 12, 8];
-    const stroke = { 'circle-stroke-width': 0.75, 'circle-stroke-color': '#fff' } as const;
+    const stroke = { 'circle-stroke-width': 0 } as const;
 
     if (mode === 'role') {
       return {
@@ -174,8 +174,7 @@
             'demand', ROUTE_NODE_COLORS.demand,
             '#888',
           ],
-          'circle-stroke-width': 1.5,
-          'circle-stroke-color': '#fff',
+          'circle-stroke-width': 0,
         },
       });
 

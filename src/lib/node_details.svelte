@@ -12,6 +12,7 @@
     type MetricStanding,
     deriveRole,
     deriveZone,
+    buildRoleLookup,
     buildAdjacency,
     computeConnectivityScores,
     metricValue,
@@ -40,6 +41,10 @@
   // ---- Network-wide baselines (computed once per dataset) ----
   const adj = $derived(buildAdjacency(network));
   const connScores = $derived(computeConnectivityScores(connectivity));
+  // Explicit per-node roles (road-waypoint ids don't encode role); zone similarly.
+  const roleById = $derived(buildRoleLookup(network.nodes));
+  const zoneById = $derived(new Map(network.nodes.map((n) => [n.id, n.zone ?? deriveZone(n.id)])));
+  const roleOf = (id: NodeId) => roleById.get(id) ?? deriveRole(id);
 
   /** Per metric: every node's value, plus the values split by role. */
   const metricValues = $derived.by(() => {
@@ -52,7 +57,7 @@
         const v = metricValue(m, n.id, centrality, connScores);
         if (v == null) continue;
         all[m].push(v);
-        byRole[m][deriveRole(n.id)].push(v);
+        byRole[m][roleOf(n.id)].push(v);
       }
     }
     return { all, byRole };
@@ -71,7 +76,7 @@
   const node = $derived.by(() => {
     if (!selectedId) return null;
     const id = selectedId;
-    const role = deriveRole(id);
+    const role = roleOf(id);
     const neighbors = adj.get(id) ?? [];
 
     const scores = METRIC_KEYS.flatMap((m) => {
@@ -100,7 +105,7 @@
     return {
       id,
       role,
-      zone: deriveZone(id),
+      zone: zoneById.get(id) ?? deriveZone(id),
       neighbors: standingOf(neighbors.length, neighborCounts),
       topNeighbors: neighbors
         .slice()
@@ -210,7 +215,7 @@
       <div class="neighbors">
         {#each node.topNeighbors as n}
           <button class="neighbor" onclick={() => onselectnode?.(n.id)}>
-            <i style="background:{ROLE_COLORS[deriveRole(n.id)]}"></i>{formatNodeName(n.id)}
+            <i style="background:{ROLE_COLORS[roleOf(n.id)]}"></i>{formatNodeName(n.id)}
             <span class="muted">{formatKm(n.distance)}</span>
           </button>
         {/each}

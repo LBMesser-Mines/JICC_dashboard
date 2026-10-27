@@ -2,14 +2,25 @@
 	import favicon from '$lib/assets/favicon.svg';
   import {page} from '$app/state';
   import {resolve} from '$app/paths';
+  import {invalidate} from '$app/navigation';
+  import {scenario} from '$lib/scenario';
 
 	let { children } = $props();
+
+  // Re-run scenario-dependent loaders (depends('app:scenario')) when the dataset
+  // changes. Skip the initial run so we don't refetch what load already produced.
+  let scenarioReady = false;
+  $effect(() => {
+    $scenario; // track changes
+    if (scenarioReady) invalidate('app:scenario');
+    else scenarioReady = true;
+  });
 
   const tabs = [
     {label: 'Overview', href: '/'},
     {label: 'Topological', href: '/topological_analysis'},
     {label: 'Predictive', href: '/historical_analysis'},
-    {label: 'Interdict', href: '/settings'},
+    {label: 'Sensor Assignment', href: '/settings'},
   ] as const;
 
   // Links carry the base path (e.g. /JICC_dashboard on GitHub Pages); ignore a trailing slash when matching.

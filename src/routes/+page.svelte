@@ -5,9 +5,21 @@
   import {emails} from '$lib/config.json'
 
   import Glossary from '$lib/glossary.svelte';
+  import { scenario, SCENARIOS } from '$lib/scenario';
 </script>
 
 <title>JICC Dashboard</title>
+<div class="grid">
+  <Box title="Scenario Selector">
+    <p>Choose which dataset the dashboard analyzes. The selection applies across all pages.</p>
+    <label class="scenario">
+      Dataset
+      <select bind:value={$scenario}>
+        {#each SCENARIOS as s}<option value={s}>{s}</option>{/each}
+      </select>
+    </label>
+  </Box>
+</div>
 <div class="grid">
   <Box title=Why>
     <p>This dashboard was developed by the Mines/Colombia Office of Naval Research (ONR) team in collaboration with the JICC to help users identify when and where to allocate resources for maximum disruption of the drug network. It is currently under development, and its final outputs are still being refined.</p>
@@ -49,6 +61,20 @@
     grid-template-columns: 1fr 300px;
     gap: 1rem;
     padding: 1rem;
+  }
+  .scenario {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: #444;
+  }
+  .scenario select {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 0.9rem;
   }
 </style>
 

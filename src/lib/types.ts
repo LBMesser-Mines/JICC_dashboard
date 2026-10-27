@@ -16,6 +16,10 @@ export interface Metadata {
 export interface NetworkNode {
   id: NodeId;
   pos: [lat: number, lon: number];
+  /** Present in preprocessed data; otherwise derived from the id via deriveRole. */
+  role?: NodeRole;
+  /** Present in preprocessed data; otherwise derived from the id via deriveZone. */
+  zone?: "US" | "MX";
 }
 
 export interface NetworkEdge {
@@ -82,4 +86,105 @@ export interface TopoAnalysis {
   routes: Route[];
   centrality: Centrality;
   connectivity: Connectivity;
+}
+
+// ---- solver / sensor-assignment solution ----
+
+/** The four centrality weights the utility score blends (sum to 1). */
+export interface SolverWeights {
+  degree: number;
+  closeness: number;
+  betweenness: number;
+  katz: number;
+}
+
+export interface SolverConfig {
+  weights: SolverWeights;
+  radius_km: number;
+  budget: number;
+  cost: number;
+  penalty_family: string;
+  theta: number;
+  gamma: number;
+  rho2: number | null;
+}
+
+/** Optimizer outcome for the asset-placement MIP. */
+export interface SolutionStats {
+  status: string;
+  objective: number;
+  coverage_utility: number;
+  overlap_penalty: number;
+  n_deployed: number;
+  n_covered: number;
+  total_cost: number;
+  mip_gap: number;
+  runtime_s: number;
+}
+
+export interface ModelSummary {
+  nodes: number;
+  routes: number;
+  budget: number;
+  max_assets_A: number;
+  weights: SolverWeights;
+  radius_km: number;
+  penalty_family: string;
+  rho_schedule: number[];
+  avg_coverage_set: number;
+  max_G: number;
+  median_G: number;
+}
+
+/** static/data/solution.json */
+export interface Solution {
+  network: string;
+  config: SolverConfig;
+  model_summary: ModelSummary;
+  solution: SolutionStats;
+  /** Node ids where a sensor/asset is placed. */
+  deployed: NodeId[];
+  /** Node ids falling within a deployed asset's coverage radius. */
+  covered: NodeId[];
+  /** route index (as string) -> number of deployed assets covering it. */
+  route_asset_counts: Record<string, number>;
+}
+
+/** Per-metric contribution to a deployed node's utility score. */
+export interface MetricDerivation {
+  /** Percentile rank in [0, 1] for this metric. */
+  a_kn: number;
+  weight: number;
+  /** a_kn * weight. */
+  contribution: number;
+}
+
+/** One deployed asset, with the derivation of why it was chosen. */
+export interface Deployment {
+  node: NodeId;
+  role: NodeRole;
+  lat: number;
+  lon: number;
+  cost: number;
+  utility_u_n: number;
+  derivation: Record<"degree" | "closeness" | "betweenness" | "katz", MetricDerivation>;
+  covers_nodes: number;
+  coverage_value_G_n: number;
+}
+
+/** static/data/deployment_report.json */
+export interface DeploymentReport {
+  network: string;
+  generated: string;
+  status: string;
+  objective: number;
+  coverage_utility: number;
+  overlap_penalty: number;
+  n_deployed: number;
+  n_covered: number;
+  budget: number;
+  total_cost: number;
+  weights: SolverWeights;
+  utility_formula: string;
+  deployments: Deployment[];
 }

@@ -8,6 +8,14 @@ node_modules
 /.svelte-kit
 /build
 
+# Raw solver output + the (large) derived files generated from it by
+# scripts/build-data.mjs. Regenerated locally via `npm run data` (predev/prebuild).
+# Exception: the small "Test Data 1" derived set is committed so the deployed
+# GitHub Pages site has one working scenario (the MEX scenarios are too large).
+/data_raw
+/static/data/*
+!/static/data/Test Data 1
+
 # OS
 .DS_Store
 Thumbs.db

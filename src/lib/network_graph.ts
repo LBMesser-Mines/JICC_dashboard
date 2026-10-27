@@ -6,6 +6,7 @@
 import type { FeatureCollection } from "geojson";
 import type {
   Network,
+  NetworkNode,
   Route,
   NodeId,
   NodeRole,
@@ -42,6 +43,9 @@ export const METRIC_RAMP = ["#ffffb2", "#fecc5c", "#fd8d3c", "#f03b20", "#bd0026
 /** Geographic zone a node belongs to. Mexico = `_mex` suffix (supply regions). */
 export type Zone = "US" | "MX";
 
+// Preprocessed data carries an explicit role/zone per node (road-waypoint ids
+// don't encode either), so prefer node.role / node.zone where a node is in hand.
+// These id-convention fallbacks apply when only an id is available.
 export function deriveZone(id: NodeId): Zone {
   return id.endsWith("_mex") ? "MX" : "US";
 }
@@ -68,8 +72,7 @@ export const CENTRALITY_METRICS = [
 ] as const;
 
 /**
- * Nodes carry no role field; derive it from the id.
- * Verified against metadata.role_counts (transshipment=33, supply=84, demand=346):
+ * Id-convention fallback for a node's role (use node.role when a node is in hand):
  *   - `poe_` prefix  -> transshipment
  *   - `_mex` suffix  -> supply
  *   - otherwise      -> demand
@@ -78,6 +81,11 @@ export function deriveRole(id: NodeId): NodeRole {
   if (id.startsWith("poe_")) return "transshipment";
   if (id.endsWith("_mex")) return "supply";
   return "demand";
+}
+
+/** nodeId -> role, honoring explicit node.role, for id-only lookups in a view. */
+export function buildRoleLookup(nodes: NetworkNode[]): Map<NodeId, NodeRole> {
+  return new Map(nodes.map((n) => [n.id, n.role ?? deriveRole(n.id)]));
 }
 
 /** Single source of truth for role colors — shared by the map paint and the legend. */
@@ -110,8 +118,8 @@ export function buildNodeGeoJSON(
       .map((n) => {
         const properties: Record<string, unknown> = {
           id: n.id,
-          role: deriveRole(n.id),
-          zone: deriveZone(n.id),
+          role: n.role ?? deriveRole(n.id),
+          zone: n.zone ?? deriveZone(n.id),
           connectivity: connScores?.[n.id] ?? 0,
         };
         for (const m of CENTRALITY_METRICS) {
@@ -131,6 +139,8 @@ export function buildEdgeGeoJSON(
   net: Network,
   pos: Map<NodeId, [number, number]>,
 ): FeatureCollection {
+  const zoneById = new Map(net.nodes.map((n) => [n.id, n.zone ?? deriveZone(n.id)]));
+  const zoneOf = (id: NodeId) => zoneById.get(id) ?? deriveZone(id);
   return {
     type: "FeatureCollection",
     features: net.edges.flatMap((e) => {
@@ -151,8 +161,8 @@ export function buildEdgeGeoJSON(
             origin: e.origin,
             destination: e.destination,
             distance: e.distance,
-            originZone: deriveZone(e.origin),
-            destZone: deriveZone(e.destination),
+            originZone: zoneOf(e.origin),
+            destZone: zoneOf(e.destination),
           },
         },
       ];
@@ -349,7 +359,7 @@ export function buildZoneOverlayGeoJSON(
       const pts = net.nodes
         .filter(
           (n) =>
-            deriveZone(n.id) === zone &&
+            (n.zone ?? deriveZone(n.id)) === zone &&
             Number.isFinite(n.pos?.[0]) &&
             Number.isFinite(n.pos?.[1]),
         )
@@ -504,6 +514,53 @@ export function percentileTier(p: number): { label: string; cls: string } {
   if (p > 30) return { label: "Typical", cls: "mid" };
   if (p > 10) return { label: "Low", cls: "lo" };
   return { label: "Very low", cls: "lo2" };
+}
+
+// ---- solution / sensor-assignment layers ----
+
+/** A deployed node is colored distinctly from a merely-covered one. */
+export const SOLUTION_COLORS = {
+  deployed: "#1d4ed8", // sensor placement
+  covered: "#16a34a", // within a sensor's radius
+  uncovered: "#8b9199", // rest of the network
+};
+
+/**
+ * Approximate geodesic circle as a [lon, lat] ring. Equirectangular offsets —
+ * accurate enough at these radii/latitudes for a coverage overlay.
+ */
+export function circleRing(
+  lat: number,
+  lon: number,
+  radiusKm: number,
+  steps = 64,
+): [number, number][] {
+  const dLat = radiusKm / 110.574;
+  const dLon = radiusKm / (111.32 * Math.cos((lat * Math.PI) / 180));
+  const ring: [number, number][] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = (i / steps) * 2 * Math.PI;
+    ring.push([lon + dLon * Math.cos(t), lat + dLat * Math.sin(t)]);
+  }
+  return ring;
+}
+
+/** One polygon per deployed asset: its coverage radius. */
+export function buildCoverageGeoJSON(
+  centers: { lat: number; lon: number }[],
+  radiusKm: number,
+): FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: centers.map((c) => ({
+      type: "Feature" as const,
+      geometry: {
+        type: "Polygon" as const,
+        coordinates: [circleRing(c.lat, c.lon, radiusKm)],
+      },
+      properties: {},
+    })),
+  };
 }
 
 /** Pretty-print a node id: `poe_san_ysidro_ca` -> `San Ysidro, CA`. */

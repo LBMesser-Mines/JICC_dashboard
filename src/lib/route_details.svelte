@@ -5,6 +5,7 @@
     ROLE_COLORS,
     ROUTE_NODE_COLORS,
     deriveRole,
+    buildRoleLookup,
     buildAdjacency,
     pathLegDistances,
     pathLength,
@@ -31,6 +32,8 @@
 
   // ---- Baselines across every route (computed once per dataset) ----
   const adj = $derived(buildAdjacency(network));
+  const roleById = $derived(buildRoleLookup(network.nodes));
+  const roleOf = (id: NodeId) => roleById.get(id) ?? deriveRole(id);
   const routeDistances = $derived(routes.map((r) => pathLength(r.path, adj)));
   const routeHops = $derived(routes.map((r) => r.distance));
   const routeIntervals = $derived(routes.map((r) => r.departure_interval));
@@ -42,7 +45,7 @@
     const total = legs.reduce<number>((s, d) => s + (d ?? 0), 0);
 
     // Redundancy between the POE this route crosses and its destination.
-    const poeIndex = r.path.findIndex((id) => deriveRole(id) === 'transshipment');
+    const poeIndex = r.path.findIndex((id) => roleOf(id) === 'transshipment');
     const poe = poeIndex >= 0 ? r.path[poeIndex] : null;
     const pair = poe ? connectivity?.poe_to_demand.results[poe]?.[r.destination] : undefined;
     const band = (connectivity?.poe_to_demand.percents[0] ?? 10).toFixed(1);
@@ -61,7 +64,7 @@
       poeLeg,
       steps: r.path.map((id, i) => ({
         id,
-        role: deriveRole(id),
+        role: roleOf(id),
         pos: (i === 0 ? 'source' : i === r.path.length - 1 ? 'demand' : 'via') as keyof typeof ROUTE_NODE_COLORS,
         betweenness: centrality
           ? standingOf(centrality.betweenness_subset[id] ?? 0, betweennessValues).percentile
